@@ -727,7 +727,7 @@
 
                     <div class="flex flex-col sm:flex-row items-center gap-3 pt-2 w-full max-w-xs">
                         <button onclick="openModal('subscriptionModal')" class="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-crown"></i> <span>立即升級方案 ($15/月起)</span>
+                            <i class="fa-solid fa-crown"></i> <span>立即升級方案（NT$190／月）</span>
                         </button>
                         <button onclick="replayPreview()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs border border-slate-700">
                             <i class="fa-solid fa-rotate-left mr-1"></i> <span>重播 15 秒試看</span>
@@ -790,20 +790,25 @@
                 <p class="text-xs text-slate-400 mt-1">使用已登入的 Gmail 進行訂閱，可獲得無限制高清串流與無廣告體驗。</p>
             </div>
 
-            <div class="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-2 text-xs">
+            <div class="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-3 text-xs">
                 <div class="flex justify-between font-bold text-white">
                     <span>用戶 Gmail 帳號：</span>
                     <span id="sub-modal-email" class="text-brand-300">user@gmail.com</span>
                 </div>
-                <div class="flex justify-between font-bold text-white">
-                    <span>方案定價：</span>
-                    <span class="text-emerald-400 font-mono">$15.00 / 月</span>
-                </div>
+                <label class="flex items-center justify-between gap-3 p-3 rounded-xl border border-brand-500 bg-brand-500/10 cursor-pointer">
+                    <span><input type="radio" name="viewer-plan" value="monthly" checked class="mr-2 accent-indigo-500"><strong class="text-white">月繳方案</strong><small class="block ml-5 mt-1 text-slate-400">付款後完整觀看所有影音 1 個月</small></span>
+                    <span class="text-emerald-400 font-mono font-bold">NT$190</span>
+                </label>
+                <label class="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-700 hover:border-brand-500 bg-slate-950/40 cursor-pointer">
+                    <span><input type="radio" name="viewer-plan" value="annual" class="mr-2 accent-indigo-500"><strong class="text-white">年繳方案</strong><small class="block ml-5 mt-1 text-slate-400">付款後完整觀看所有影音 1 年</small></span>
+                    <span class="text-emerald-400 font-mono font-bold">NT$2,080</span>
+                </label>
             </div>
 
             <button onclick="processSubscription()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold rounded-xl text-sm transition-all shadow-lg shadow-amber-500/20">
-                <i class="fa-solid fa-lock-open mr-1.5"></i> <span>確認付款並解鎖全站內容</span>
+                <i class="fa-solid fa-lock-open mr-1.5"></i> <span>確認方案並解鎖全站內容</span>
             </button>
+            <p class="text-[10px] leading-relaxed text-slate-500">目前為前端訂閱權限流程示範，不會產生真實扣款。正式收款需連接安全金流後端並由後端驗證付款。</p>
         </div>
     </div>
 
@@ -816,7 +821,8 @@
     <!-- JavaScript Section -->
     <script>
         // State variables
-        let currentUser = null; // { email, name, isPaid }
+        let currentUser = null; // { email, name, isPaid, plan, expiresAt }
+        const SUBSCRIPTION_KEY = 'streampulse_paid_subscription';
         let activePlayerMediaId = null;
         let isPlaying = false;
         let isMuted = false;
@@ -1396,8 +1402,25 @@
 
         // --- AUTH & TAB LOGIC ---
 
+        function getStoredSubscription(email) {
+            try {
+                const saved = JSON.parse(localStorage.getItem(SUBSCRIPTION_KEY) || 'null');
+                if (!saved || saved.email !== email || !saved.expiresAt || Date.now() >= saved.expiresAt) {
+                    if (saved && Date.now() >= Number(saved.expiresAt || 0)) localStorage.removeItem(SUBSCRIPTION_KEY);
+                    return null;
+                }
+                return saved;
+            } catch (error) {
+                localStorage.removeItem(SUBSCRIPTION_KEY);
+                return null;
+            }
+        }
+
         function loginWithGmail(email, name, isPaid = false) {
-            currentUser = { email, name, isPaid };
+            const subscription = getStoredSubscription(email);
+            currentUser = subscription
+                ? { email, name, isPaid: true, plan: subscription.plan, expiresAt: subscription.expiresAt }
+                : { email, name, isPaid };
             closeModal('gmailModal');
             updateUserUI();
             showToast(`歡迎回來！已以 Gmail (${email}) 登入`, 'fa-circle-check text-emerald-400');
@@ -1431,7 +1454,8 @@
                 document.getElementById('dropdown-user-name').innerText = currentUser.name || 'Gmail User';
                 
                 if (currentUser.isPaid) {
-                    statusBadge.innerHTML = `<i class="fa-solid fa-crown text-[8px] text-amber-400"></i> Pro 付費 VIP (已解鎖)`;
+                    const planName = currentUser.plan === 'annual' ? '年繳' : '月繳';
+                    statusBadge.innerHTML = `<i class="fa-solid fa-crown text-[8px] text-amber-400"></i> Pro ${planName} VIP (完整影音)`;
                     statusBadge.className = 'text-[9px] font-semibold text-emerald-400 flex items-center gap-1';
                     document.getElementById('toggle-pay-text').innerText = '切換為 [免費會員] 狀態';
                 } else {
@@ -1471,10 +1495,22 @@
                 return;
             }
 
+            const selected = document.querySelector('input[name="viewer-plan"]:checked');
+            const plan = selected && selected.value === 'annual' ? 'annual' : 'monthly';
+            const expiry = new Date();
+            expiry.setMonth(expiry.getMonth() + (plan === 'annual' ? 12 : 1));
             currentUser.isPaid = true;
+            currentUser.plan = plan;
+            currentUser.expiresAt = expiry.getTime();
+            localStorage.setItem(SUBSCRIPTION_KEY, JSON.stringify({
+                email: currentUser.email,
+                plan,
+                priceTwd: plan === 'annual' ? 2080 : 190,
+                expiresAt: currentUser.expiresAt
+            }));
             updateUserUI();
             closeModal('subscriptionModal');
-            showToast('已成功升級 Pro 會員，全站影音已解鎖！', 'fa-crown text-amber-400');
+            showToast(`已啟用${plan === 'annual' ? '年繳 NT$2,080' : '月繳 NT$190'}方案，全站完整影音已解鎖！`, 'fa-crown text-amber-400');
 
             if (!document.getElementById('playerModal').classList.contains('hidden')) {
                 startMediaPlayback();
