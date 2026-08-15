@@ -695,6 +695,12 @@
                     您的瀏覽器不支援影片播放。
                 </video>
 
+                <div id="media-error-overlay" class="hidden absolute inset-0 z-40 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center gap-4">
+                    <i class="fa-solid fa-triangle-exclamation text-rose-400 text-4xl"></i>
+                    <div><h4 class="text-lg font-bold text-white">影音來源載入失敗</h4><p id="media-error-message" class="text-xs text-slate-400 mt-2 max-w-lg">請檢查 Friendly URL、Bucket 公開權限或影片格式。</p></div>
+                    <button onclick="openActiveSourceDirectly()" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold"><i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>直接開啟原始影片檢查</button>
+                </div>
+
                 <!-- 15s Countdown -->
                 <div id="preview-countdown-box" class="absolute top-4 left-4 z-20 bg-amber-500/90 text-slate-950 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg">
                     <i class="fa-solid fa-clock"></i>
@@ -1251,6 +1257,7 @@
             const video = document.getElementById('real-video-player');
             const source = document.getElementById('video-source');
             const item = mediaDatabase.find(m => m.id === activePlayerMediaId) || mediaDatabase[0];
+            document.getElementById('media-error-overlay').classList.add('hidden');
 
             if (source.getAttribute('src') !== item.src) {
                 source.setAttribute('src', item.src);
@@ -1313,6 +1320,20 @@
             isPlaying = false;
             document.getElementById('play-pause-icon').className = 'fa-solid fa-play';
             document.getElementById('paywall-overlay').classList.remove('hidden');
+        }
+
+        function handleMediaLoadError() {
+            const video = document.getElementById('real-video-player');
+            const item = mediaDatabase.find(m => m.id === activePlayerMediaId);
+            const codes = { 1: '播放被中止', 2: '網路載入失敗', 3: '影片解碼失敗', 4: '網址、權限或格式不受支援' };
+            const detail = video.error ? (codes[video.error.code] || `錯誤代碼 ${video.error.code}`) : '無法讀取影音來源';
+            document.getElementById('media-error-message').innerText = `${detail}。請直接開啟來源確認是否為 404、Unauthorized，或 MP4 不是 H.264/AAC。${item ? `\n${item.src}` : ''}`;
+            document.getElementById('media-error-overlay').classList.remove('hidden');
+        }
+
+        function openActiveSourceDirectly() {
+            const item = mediaDatabase.find(m => m.id === activePlayerMediaId);
+            if (item && item.src) window.open(item.src, '_blank', 'noopener,noreferrer');
         }
 
         function replayPreview() {
@@ -1630,6 +1651,7 @@
             loadPersonalLibrary();
             renderMediaGrid();
             document.getElementById('real-video-player').onended = handlePlaybackEnded;
+            document.getElementById('real-video-player').onerror = handleMediaLoadError;
             renderSplitLogs();
             calculateRevenue();
             startAutoSplitScheduler();
