@@ -68,3 +68,4 @@ GitHub Pages 最外層至少需要上傳 `index.html` 與 `media.json`。若也�
 - 驗證 Friendly URL 必須使用 HTTPS。
 - 新增影音清單的瀏覽器持久保存。
 - 保留原有播放、15 秒試看、訂閱、分紅試算與後台介面。
+- Updated
